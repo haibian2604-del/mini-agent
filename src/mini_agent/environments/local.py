@@ -13,10 +13,10 @@ def execute(command: str, timeout: int = 30) -> dict:
         result = subprocess.run(
             command,
             shell=True,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             timeout=timeout,
-            stderr=subprocess.STDOUT,
         )
         return {"output": result.stdout, "returncode": result.returncode}
     except subprocess.TimeoutExpired:
