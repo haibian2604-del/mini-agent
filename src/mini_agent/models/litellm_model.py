@@ -8,14 +8,11 @@ from litellm import completion
 
 load_dotenv()
 
-MODEL_NAME = "zhipuai/glm-4.6"
 
-# MODEL/BASE_URL come from .env (proven working: openai/<model> + BASE_URL).
-# MODEL_NAME is the fallback when .env has no MODEL.
 def chat(messages: list[dict]) -> str:
     """One LLM call; returns message content ('' if the model returned None)."""
     response = completion(
-        model=os.getenv("MODEL", MODEL_NAME),
+        model=os.environ["MODEL"],
         messages=messages,
         api_key=os.getenv("API_KEY"),
         api_base=os.getenv("BASE_URL") or None,
