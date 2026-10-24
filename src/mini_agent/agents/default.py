@@ -28,7 +28,7 @@ def run(task: str, max_steps: int = 20) -> dict:
     for step in range(1, max_steps + 1):
         # 1. model reply goes into history BEFORE parsing — format errors
         #    must stay visible so the model can see and fix its own mistake
-        reply = litellm_model.chat(messages)
+        reply, _ = litellm_model.chat(messages)  # usage accounting lands in step 11
         messages.append({"role": "assistant", "content": reply})
 
         try:
@@ -59,10 +59,11 @@ def run(task: str, max_steps: int = 20) -> dict:
 
 if __name__ == "__main__":
     # Offline loop test: fake the model, script a three-act play.
+    _NO_USAGE = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
     replies = iter([
-        "THOUGHT: 故意格式错误，没有bash块",                                        # 1: format error
-        "THOUGHT: 先看看\n```bash\necho hello\n```",                                # 2: real command
-        "THOUGHT: 完事了\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```",  # 3: done
+        ("THOUGHT: 故意格式错误，没有bash块", _NO_USAGE),                                        # 1: format error
+        ("THOUGHT: 先看看\n```bash\necho hello\n```", _NO_USAGE),                                # 2: real command
+        ("THOUGHT: 完事了\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```", _NO_USAGE),  # 3: done
     ])
     litellm_model.chat = lambda messages: next(replies)  # swap in the fake
 

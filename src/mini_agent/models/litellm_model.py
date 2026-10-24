@@ -4,20 +4,34 @@ import os
 import re
 
 from dotenv import load_dotenv
-from litellm import completion
+from litellm import completion, completion_cost
 
 load_dotenv()
 
 
-def chat(messages: list[dict]) -> str:
-    """One LLM call; returns message content ('' if the model returned None)."""
+def _usage(response) -> dict:
+    """Token/cost accounting; cost falls back to 0.0 when the price is unknown."""
+    usage = getattr(response, "usage", None)
+    try:
+        cost = completion_cost(response)
+    except Exception:
+        cost = 0.0  # custom endpoints / unknown models have no price in the map
+    return {
+        "prompt_tokens": getattr(usage, "prompt_tokens", 0),
+        "completion_tokens": getattr(usage, "completion_tokens", 0),
+        "cost_usd": cost,
+    }
+
+
+def chat(messages: list[dict]) -> tuple[str, dict]:
+    """One LLM call; returns (content, usage). Content is '' if the model returned None."""
     response = completion(
         model=os.environ["MODEL"],
         messages=messages,
         api_key=os.getenv("API_KEY"),
         api_base=os.getenv("BASE_URL") or None,
     )
-    return response.choices[0].message.content or ""
+    return response.choices[0].message.content or "", _usage(response)
 
 
 _ACTION_RE = re.compile(r"```bash\s*(.*?)```", re.DOTALL)
@@ -58,5 +72,22 @@ if __name__ == "__main__":
         assert "found 0" in str(e), e
     else:
         raise AssertionError("zero bash blocks should raise ValueError")
+
+    # 4. chat() accounting, offline: fake the litellm completion call
+    class _Msg:
+        content = "hi"
+    class _Choice:
+        message = _Msg()
+    class _Usage:
+        prompt_tokens = 10
+        completion_tokens = 5
+    class _Resp:
+        choices = [_Choice()]
+        usage = _Usage()
+
+    completion = lambda **kw: _Resp()  # noqa: F811 - shadow the real one
+    content, usage = chat([{"role": "user", "content": "ping"}])
+    assert content == "hi"
+    assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.0}, usage
 
     print("✅ litellm_model self-test passed")
