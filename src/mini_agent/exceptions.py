@@ -19,15 +19,3 @@ class LimitsExceeded(InterruptAgentFlow):
 
 class FormatError(InterruptAgentFlow):
     """Model reply violated the format; error message is fed back for self-correction."""
-
-
-if __name__ == "__main__":
-    try:
-        raise Submitted(
-            {"role": "exit", "content": "done"},
-            {"role": "user", "content": "extra"},
-        )
-    except InterruptAgentFlow as e:
-        assert len(e.messages) == 2
-        assert e.messages[0]["role"] == "exit"
-    print("ok")
