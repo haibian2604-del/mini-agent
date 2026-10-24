@@ -1,0 +1,66 @@
+"""Tests for mini_agent.models.litellm_model — all offline (fake completion)."""
+
+import mini_agent.models.litellm_model as litellm_model
+from mini_agent.models.litellm_model import chat, parse_action
+
+
+def test_parse_action_single_block():
+    cmd = parse_action("THOUGHT: look around first.\n\n```bash\nls -la src/\n```\n")
+    assert cmd == "ls -la src/"
+
+
+def test_parse_action_two_blocks_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="found 2"):
+        parse_action("```bash\nls\n```\nthen\n```bash\npwd\n```")
+
+
+def test_parse_action_zero_blocks_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="found 0"):
+        parse_action("THOUGHT only, no command")
+
+
+class _FakeMsg:
+    content = "hi"
+
+
+class _FakeChoice:
+    message = _FakeMsg()
+
+
+class _FakeUsage:
+    prompt_tokens = 10
+    completion_tokens = 5
+
+
+class _FakeResp:
+    choices = [_FakeChoice()]
+    usage = _FakeUsage()
+
+
+def test_chat_returns_content_and_usage(monkeypatch):
+    monkeypatch.setattr(litellm_model, "completion", lambda **kw: _FakeResp())
+    content, usage = chat([{"role": "user", "content": "ping"}])
+    assert content == "hi"
+    assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.0}
+
+
+def test_chat_none_content_becomes_empty_string(monkeypatch):
+    monkeypatch.setattr(litellm_model, "completion", lambda **kw: _FakeResp())
+
+    class _NoneMsg:
+        content = None
+
+    class _NoneChoice:
+        message = _NoneMsg()
+
+    class _NoneResp:
+        choices = [_NoneChoice()]
+        usage = _FakeUsage()
+
+    monkeypatch.setattr(litellm_model, "completion", lambda **kw: _NoneResp())
+    content, _ = chat([])
+    assert content == ""
