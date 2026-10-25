@@ -102,6 +102,28 @@ def test_run_writes_each_round(monkeypatch, tmp_path):
     assert any("Format error" in m["content"] for m in data["messages"] if m["role"] == "user")
 
 
+def test_run_uses_injected_env(monkeypatch):
+    class FakeEnv:
+        def __init__(self):
+            self.commands = []
+
+        def execute(self, command, timeout=30):
+            self.commands.append(command)
+            return {"output": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n", "returncode": 0}
+
+    replies = iter([
+        ("THOUGHT: 干活\n```bash\necho hi\n```", _U0),
+        ("THOUGHT: 完事了\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```", _U0),
+    ])
+    monkeypatch.setattr(litellm_model, "chat", lambda messages: next(replies))
+
+    env = FakeEnv()
+    result = run("测试", env=env)
+
+    assert env.commands == ["echo hi", "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"]
+    assert result["exit_status"] == "success"
+
+
 def test_run_model_error(monkeypatch):
     # fake raises past chat() entirely -> bypasses retry; verifies agent routing only
     calls = iter([ConnectionError("boom")] * 10)

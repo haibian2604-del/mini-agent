@@ -2,13 +2,15 @@
 
 Control flow = exceptions: every exit reason raises InterruptAgentFlow carrying
 the messages to append; the loop's only exit signal is a role="exit" message.
+
+Dependencies are duck-typed: model has .chat()/.parse_action(), env has
+.execute() — local, docker, fakes, anything that honors the contract.
 """
 
 import json
 from pathlib import Path
 
 from mini_agent.config.prompts import SYSTEM_PROMPT
-from mini_agent.environments import local
 from mini_agent.exceptions import (
     FormatError,
     InterruptAgentFlow,
@@ -40,7 +42,12 @@ def run(
     max_consecutive_format_errors: int = 3,
     max_total_tokens: int = 150_000,  # cost_usd stays 0.0 on custom endpoints (probe-verified), so tokens are the real budget
     output_path: Path | None = None,
+    env=None,  # duck-typed: anything with .execute(command, timeout) -> {output, returncode}
 ) -> dict:
+    if env is None:
+        from mini_agent.environments import local
+
+        env = local
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": task},
@@ -123,7 +130,7 @@ def run(
                 raise  # FormatError already carries the feedback message
 
             print(f"[step {steps}] $ {command}")
-            obs = local.execute(command)
+            obs = env.execute(command)
             print(f"[step {steps}] -> rc={obs['returncode']} {_preview(obs['output'])}")
 
             messages.append({
