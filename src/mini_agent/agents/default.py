@@ -139,7 +139,6 @@ def run(
                 raise Submitted(
                     {"role": "exit", "content": f"Task completed successfully after {steps} steps."}
                 )
-            _snapshot()
         except InterruptAgentFlow as e:
             messages.extend(e.messages)
             if isinstance(e, Submitted):
@@ -149,9 +148,11 @@ def run(
             else:
                 exit_status = "limits_exceeded"
 
+        # all paths converge here — every round is on disk, including error rounds
+        _snapshot()
+
         # the ONLY exit signal: an exit message in history
         if messages[-1]["role"] == "exit":
-            _snapshot()  # final write includes the exit message + real status
             break
 
     return {"exit_status": exit_status, "messages": messages}
