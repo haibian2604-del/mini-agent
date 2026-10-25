@@ -28,6 +28,9 @@ htmlcov/
 .env
 .env.*
 
+# Agent run artifacts
+trajectories/
+
 # Editors / OS
 .idea/
 .vscode/
