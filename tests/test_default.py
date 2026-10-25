@@ -33,6 +33,16 @@ def test_run_consecutive_format_errors_limit(monkeypatch):
     assert "consecutive format errors" in result["messages"][-1]["content"]
 
 
+def test_run_token_limit(monkeypatch):
+    # probe result: cost_usd is 0.0 on custom endpoints, so tokens are the real budget
+    replies = iter([("whatever", {"prompt_tokens": 80_000, "completion_tokens": 0, "cost_usd": 0.0})] * 5)
+    monkeypatch.setattr(litellm_model, "chat", lambda messages: next(replies))
+
+    result = run("测试任务", max_total_tokens=150_000)
+    assert result["exit_status"] == "limits_exceeded"
+    assert "token limit" in result["messages"][-1]["content"]
+
+
 def test_run_cost_limit(monkeypatch):
     replies = iter(
         [("whatever", {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 2.0})] * 5

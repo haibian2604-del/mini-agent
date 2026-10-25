@@ -34,6 +34,7 @@ def run(
     max_steps: int = 20,
     max_cost_usd: float = 5.0,
     max_consecutive_format_errors: int = 3,
+    max_total_tokens: int = 150_000,  # cost_usd stays 0.0 on custom endpoints (probe-verified), so tokens are the real budget
 ) -> dict:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -41,6 +42,7 @@ def run(
     ]
     steps = 0
     total_cost = 0.0
+    total_tokens = 0
     format_errors = 0
     exit_status = "unknown"
 
@@ -58,6 +60,14 @@ def run(
                 ) from e
             steps += 1
             total_cost += usage["cost_usd"]
+            total_tokens += usage["prompt_tokens"] + usage["completion_tokens"]
+            if total_tokens > max_total_tokens:
+                raise LimitsExceeded(
+                    {
+                        "role": "exit",
+                        "content": f"Stopped: token limit ({max_total_tokens}) exceeded ({total_tokens}).",
+                    }
+                )
             if total_cost > max_cost_usd:
                 raise LimitsExceeded(
                     {
