@@ -73,7 +73,7 @@ def run(
             try:
                 command = litellm_model.parse_action(reply)
                 format_errors = 0
-            except ValueError as e:
+            except FormatError as e:
                 format_errors += 1
                 if format_errors >= max_consecutive_format_errors:
                     raise LimitsExceeded(
@@ -82,7 +82,7 @@ def run(
                             "content": f"Stopped: {format_errors} consecutive format errors.",
                         }
                     ) from e
-                raise FormatError({"role": "user", "content": str(e)}) from e
+                raise  # FormatError already carries the feedback message
 
             print(f"[step {steps}] $ {command}")
             obs = local.execute(command)

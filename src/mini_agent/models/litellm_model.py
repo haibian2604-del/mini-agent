@@ -2,11 +2,18 @@
 
 import os
 import re
+import time
 
 from dotenv import load_dotenv
 from litellm import completion, completion_cost
+from litellm.exceptions import AuthenticationError
+
+from mini_agent.exceptions import FormatError
 
 load_dotenv()
+
+MAX_RETRIES = 3
+RETRY_INTERVAL = 2  # seconds
 
 
 def _usage(response) -> dict:
@@ -24,13 +31,26 @@ def _usage(response) -> dict:
 
 
 def chat(messages: list[dict]) -> tuple[str, dict]:
-    """One LLM call; returns (content, usage). Content is '' if the model returned None."""
-    response = completion(
-        model=os.environ["MODEL"],
-        messages=messages,
-        api_key=os.getenv("API_KEY"),
-        api_base=os.getenv("BASE_URL") or None,
-    )
+    """One LLM call with retry (3x, 2s apart); returns (content, usage).
+
+    AuthenticationError and KeyboardInterrupt are never retried — a bad key
+    will not fix itself, and the user pressing Ctrl-C means now.
+    """
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = completion(
+                model=os.environ["MODEL"],
+                messages=messages,
+                api_key=os.getenv("API_KEY"),
+                api_base=os.getenv("BASE_URL") or None,
+            )
+            break
+        except (AuthenticationError, KeyboardInterrupt):
+            raise
+        except Exception:
+            if attempt == MAX_RETRIES:
+                raise
+            time.sleep(RETRY_INTERVAL)
     return response.choices[0].message.content or "", _usage(response)
 
 
@@ -40,15 +60,18 @@ _ACTION_RE = re.compile(r"```bash\s*(.*?)```", re.DOTALL)
 def parse_action(text: str) -> str:
     """Extract the single bash command from a model reply.
 
-    Raises ValueError (fed back to the model for self-correction) when the
-    reply does not contain exactly one ```bash block.
+    Raises FormatError carrying the feedback message (fed back to the model
+    for self-correction) when the reply has no exactly one ```bash block.
     """
     blocks = _ACTION_RE.findall(text)
     if len(blocks) != 1:
-        raise ValueError(
-            f"Format error: expected exactly 1 bash code block, found {len(blocks)}. "
-            "Reply with a short THOUGHT and exactly one ```bash block containing one command."
-        )
+        raise FormatError({
+            "role": "user",
+            "content": (
+                f"Format error: expected exactly 1 bash code block, found {len(blocks)}. "
+                "Reply with a short THOUGHT and exactly one ```bash block containing one command."
+            ),
+        })
     return blocks[0].strip()
 
 
