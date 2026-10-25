@@ -134,9 +134,10 @@ def test_crash_mid_run_leaves_honest_trajectory(monkeypatch, tmp_path):
     ])
 
     def flaky_chat(messages):
-        if next(replies, None) is None:
+        reply = next(replies, None)
+        if reply is None:
             raise KeyboardInterrupt  # round 2: user hits Ctrl-C
-        return next(replies), _U0
+        return reply, _U0
 
     monkeypatch.setattr(litellm_model, "chat", flaky_chat)
     out = tmp_path / "traj.json"
