@@ -152,8 +152,9 @@ def run(
                 exit_status = "success"
             elif isinstance(e, ModelError):
                 exit_status = "model_error"
-            else:
+            elif isinstance(e, LimitsExceeded):
                 exit_status = "limits_exceeded"
+            # FormatError: non-fatal, the loop continues — exit_status stays as-is
 
         # all paths converge here — every round is on disk, including error rounds
         _snapshot()

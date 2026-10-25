@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 import mini_agent.models.litellm_model as litellm_model
 from mini_agent.agents.default import run
 
@@ -123,6 +125,27 @@ def test_run_uses_injected_env(monkeypatch):
 
     assert env.commands == ["echo hi", "echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"]
     assert result["exit_status"] == "success"
+
+
+def test_crash_mid_run_leaves_honest_trajectory(monkeypatch, tmp_path):
+    # Ctrl-C mid-run: the disk snapshot must not claim limits_exceeded
+    replies = iter([
+        "THOUGHT: 坏回复，没有bash块",  # round 1: format error
+    ])
+
+    def flaky_chat(messages):
+        if next(replies, None) is None:
+            raise KeyboardInterrupt  # round 2: user hits Ctrl-C
+        return next(replies), _U0
+
+    monkeypatch.setattr(litellm_model, "chat", flaky_chat)
+    out = tmp_path / "traj.json"
+    with pytest.raises(KeyboardInterrupt):
+        run("测试", output_path=out)
+
+    data = json.loads(out.read_text())
+    assert data["exit_status"] == "unknown"  # before the fix: limits_exceeded lied
+    assert data["messages"][-1]["role"] == "user"  # stopped at format feedback, not exit
 
 
 def test_run_model_error(monkeypatch):
