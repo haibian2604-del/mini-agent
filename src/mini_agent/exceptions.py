@@ -14,7 +14,11 @@ class Submitted(InterruptAgentFlow):
 
 
 class LimitsExceeded(InterruptAgentFlow):
-    """A limit was exhausted: steps, cost, or consecutive format errors."""
+    """A limit was exhausted: steps, tokens, cost, or consecutive format errors."""
+
+
+class ModelError(InterruptAgentFlow):
+    """Model call failed for good (retries exhausted); distinct from limits."""
 
 
 class FormatError(InterruptAgentFlow):

@@ -10,6 +10,7 @@ from mini_agent.exceptions import (
     FormatError,
     InterruptAgentFlow,
     LimitsExceeded,
+    ModelError,
     Submitted,
 )
 from mini_agent.models import litellm_model
@@ -55,7 +56,7 @@ def run(
             try:
                 reply, usage = litellm_model.chat(messages)
             except Exception as e:
-                raise LimitsExceeded(
+                raise ModelError(
                     {"role": "exit", "content": f"Stopped: model call failed: {e}"}
                 ) from e
             steps += 1
@@ -84,6 +85,7 @@ def run(
                 command = litellm_model.parse_action(reply)
                 format_errors = 0
             except FormatError as e:
+                print(f"[step {steps}] format error: {_preview(e.messages[0]['content'])}")
                 format_errors += 1
                 if format_errors >= max_consecutive_format_errors:
                     raise LimitsExceeded(
@@ -113,7 +115,12 @@ def run(
                 )
         except InterruptAgentFlow as e:
             messages.extend(e.messages)
-            exit_status = "success" if isinstance(e, Submitted) else "limits_exceeded"
+            if isinstance(e, Submitted):
+                exit_status = "success"
+            elif isinstance(e, ModelError):
+                exit_status = "model_error"
+            else:
+                exit_status = "limits_exceeded"
 
         # the ONLY exit signal: an exit message in history
         if messages[-1]["role"] == "exit":

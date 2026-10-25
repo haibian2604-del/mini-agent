@@ -63,3 +63,17 @@ def test_run_max_steps_limit(monkeypatch):
     result = run("测试任务", max_steps=5)
     assert result["exit_status"] == "limits_exceeded"
     assert "max steps" in result["messages"][-1]["content"]
+
+
+def test_run_model_error(monkeypatch):
+    # fake raises past chat() entirely -> bypasses retry; verifies agent routing only
+    calls = iter([ConnectionError("boom")] * 10)
+
+    def fake_chat(messages):
+        raise next(calls)
+
+    monkeypatch.setattr(litellm_model, "chat", fake_chat)
+    result = run("测试任务", max_steps=5)
+    assert result["exit_status"] == "model_error"
+    assert result["messages"][-1]["role"] == "exit"
+    assert "model call failed" in result["messages"][-1]["content"]
