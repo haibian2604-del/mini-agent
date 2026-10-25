@@ -109,7 +109,8 @@ def test_run_uses_injected_env(monkeypatch):
 
         def execute(self, command, timeout=30):
             self.commands.append(command)
-            return {"output": "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n", "returncode": 0}
+            output = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n" if "COMPLETE" in command else "hi\n"
+            return {"output": output, "returncode": 0}
 
     replies = iter([
         ("THOUGHT: 干活\n```bash\necho hi\n```", _U0),
