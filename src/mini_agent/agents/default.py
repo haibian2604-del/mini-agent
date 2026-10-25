@@ -4,6 +4,9 @@ Control flow = exceptions: every exit reason raises InterruptAgentFlow carrying
 the messages to append; the loop's only exit signal is a role="exit" message.
 """
 
+import json
+from pathlib import Path
+
 from mini_agent.config.prompts import SYSTEM_PROMPT
 from mini_agent.environments import local
 from mini_agent.exceptions import (
@@ -36,6 +39,7 @@ def run(
     max_cost_usd: float = 5.0,
     max_consecutive_format_errors: int = 3,
     max_total_tokens: int = 150_000,  # cost_usd stays 0.0 on custom endpoints (probe-verified), so tokens are the real budget
+    output_path: Path | None = None,
 ) -> dict:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -46,6 +50,28 @@ def run(
     total_tokens = 0
     format_errors = 0
     exit_status = "unknown"
+
+    def _snapshot():
+        """Dump current state; called every round (crash safety) and once at the end."""
+        if output_path is None:
+            return
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(
+                {
+                    "task": task,
+                    "exit_status": exit_status,
+                    "info": {
+                        "steps": steps,
+                        "total_cost_usd": total_cost,
+                        "total_tokens": total_tokens,
+                    },
+                    "messages": messages,
+                },
+                ensure_ascii=False,  # keep Chinese readable, not \uXXXX
+                indent=2,
+            )
+        )
 
     while True:
         try:
@@ -113,6 +139,7 @@ def run(
                 raise Submitted(
                     {"role": "exit", "content": f"Task completed successfully after {steps} steps."}
                 )
+            _snapshot()
         except InterruptAgentFlow as e:
             messages.extend(e.messages)
             if isinstance(e, Submitted):
@@ -124,6 +151,7 @@ def run(
 
         # the ONLY exit signal: an exit message in history
         if messages[-1]["role"] == "exit":
+            _snapshot()  # final write includes the exit message + real status
             break
 
     return {"exit_status": exit_status, "messages": messages}

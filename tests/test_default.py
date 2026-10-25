@@ -1,5 +1,7 @@
 """Tests for mini_agent.agents.default — offline via fake model (monkeypatch)."""
 
+import json
+
 import mini_agent.models.litellm_model as litellm_model
 from mini_agent.agents.default import run
 
@@ -63,6 +65,41 @@ def test_run_max_steps_limit(monkeypatch):
     result = run("测试任务", max_steps=5)
     assert result["exit_status"] == "limits_exceeded"
     assert "max steps" in result["messages"][-1]["content"]
+
+
+def test_run_saves_trajectory(monkeypatch, tmp_path):
+    replies = iter([
+        ("THOUGHT: 故意格式错误，没有bash块", _U0),
+        ("THOUGHT: 先看看\n```bash\necho hello\n```", _U0),
+        ("THOUGHT: 完事了\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```", _U0),
+    ])
+    monkeypatch.setattr(litellm_model, "chat", lambda messages: next(replies))
+
+    out = tmp_path / "traj.json"
+    result = run("测试任务", output_path=out)
+
+    data = json.loads(out.read_text())  # valid JSON, Chinese kept readable
+    assert data["task"] == "测试任务"
+    assert data["exit_status"] == "success"
+    assert data["info"]["steps"] == 3
+    assert len(data["messages"]) == len(result["messages"])
+
+
+def test_run_writes_each_round(monkeypatch, tmp_path):
+    # 2nd step succeeds; file must already exist and be valid after the run
+    replies = iter([
+        ("THOUGHT: 先格式错误一轮", _U0),
+        ("THOUGHT: 完事了\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```", _U0),
+    ])
+    monkeypatch.setattr(litellm_model, "chat", lambda messages: next(replies))
+
+    out = tmp_path / "traj.json"
+    run("测试任务", output_path=out)
+
+    data = json.loads(out.read_text())
+    assert data["exit_status"] == "success"
+    # format-error round landed in the saved history too
+    assert any("Format error" in m["content"] for m in data["messages"] if m["role"] == "user")
 
 
 def test_run_model_error(monkeypatch):
