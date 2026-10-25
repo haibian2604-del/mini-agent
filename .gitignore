@@ -35,3 +35,6 @@ trajectories/
 .idea/
 .vscode/
 .DS_Store
+
+# sandbox workspace mount (run artifacts)
+workspace/
