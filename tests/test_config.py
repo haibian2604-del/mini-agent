@@ -1,5 +1,8 @@
 """Tests for config loading: yaml overrides pydantic defaults."""
 
+import pytest
+from pydantic import ValidationError
+
 from mini_agent.config import load_config
 
 
@@ -18,3 +21,17 @@ def test_load_config_merges_defaults(tmp_path):
 def test_load_packaged_default_config():
     cfg = load_config()  # the shipped config/default.yaml
     assert "/" in cfg.model  # provider prefix present (litellm contract)
+
+
+def test_config_rejects_unknown_keys(tmp_path):
+    p = tmp_path / "cfg.yaml"
+    p.write_text("model: openai/glm-x\nmax_step: 3\n")  # typo: max_step
+    with pytest.raises(ValidationError, match="max_step"):
+        load_config(p)
+
+
+def test_config_rejects_bad_env(tmp_path):
+    p = tmp_path / "cfg.yaml"
+    p.write_text("model: openai/glm-x\nenv: kubernetes\n")
+    with pytest.raises(ValidationError, match="env"):
+        load_config(p)
