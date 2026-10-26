@@ -1,53 +1,122 @@
-"""Entry point: uv run python -m mini_agent.run "task text" [--env ...] [--model ...]
+"""CLI: mini-agent run "task" / mini-agent inspect traj.json
 
-Priority: CLI flags > config/default.yaml > built-in defaults.
-Secrets (API_KEY/BASE_URL) stay in .env; behavior config lives in yaml.
+UI concerns (typer/rich) live ONLY here — the agent loop stays plain print.
 """
 
-import argparse
+import json
+import re
 from datetime import datetime
 from pathlib import Path
 
+import typer
+from rich.console import Console
+from rich.markup import escape
+from rich.syntax import Syntax
+
 from mini_agent.agents import default
-from mini_agent.config import load_config
+from mini_agent.config import Config, load_config
 from mini_agent.environments import local
 from mini_agent.environments.docker import DockerEnvironment
 
+app = typer.Typer(help="A minimal coding agent.")
+console = Console()
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("task", nargs="?", default=None)          # 不传就 input()
-    parser.add_argument("--env", choices=["local", "docker"], default=None)
-    parser.add_argument("--model", default=None)
-    parser.add_argument("--config", default=None, help="path to yaml config")
-    args = parser.parse_args()
+_ACTION_RE = re.compile(r"```bash\s*(.*?)```", re.DOTALL)
 
-    cfg = load_config(args.config)
-    model = args.model or cfg.model
-    env_name = args.env or cfg.env
 
-    task = args.task or input("任务: ")
-    env = DockerEnvironment() if env_name == "docker" else local
+def _build_env(name: str):
+    return DockerEnvironment() if name == "docker" else local
+
+
+def _run_one(task: str, cfg: Config, model: str, environment) -> None:
     out = Path("trajectories") / f"{datetime.now():%Y%m%d-%H%M%S}.json"
+    result = default.run(
+        task,
+        model=model,
+        env=environment,
+        output_path=out,
+        max_steps=cfg.max_steps,
+        max_cost_usd=cfg.max_cost_usd,
+        max_total_tokens=cfg.max_total_tokens,
+        max_consecutive_format_errors=cfg.max_consecutive_format_errors,
+    )
+    console.print(f"\n== {result['exit_status']} ==")
+    console.print(f"trajectory: {out}\n")
+
+
+@app.command()
+def run(
+    task: str | None = typer.Argument(None),
+    env: str | None = typer.Option(None, "--env", help="local | docker (default: yaml)"),
+    model: str | None = typer.Option(None, "--model", help="litellm model name (default: yaml)"),
+    config: Path | None = typer.Option(None, "--config", help="path to yaml config"),
+    max_steps: int | None = typer.Option(None, "--max-steps"),
+):
+    """跑一个任务。不带 task 参数 → 进入交互模式。"""
+    cfg = load_config(config)
+    model = model or cfg.model
+    environment = _build_env(env or cfg.env)
+    limit = max_steps or cfg.max_steps
 
     try:
-        result = default.run(
-            task,
-            model=model,
-            env=env,
-            output_path=out,
-            max_steps=cfg.max_steps,
-            max_cost_usd=cfg.max_cost_usd,
-            max_total_tokens=cfg.max_total_tokens,
-            max_consecutive_format_errors=cfg.max_consecutive_format_errors,
-        )
+        if task:
+            _run_one(task, cfg, model, environment)
+        else:
+            console.print("[bold]交互模式[/]（空行或 exit 退出）")
+            while True:
+                try:
+                    t = input("任务> ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    break
+                if not t or t in ("exit", "quit"):
+                    break
+                _run_one(t, cfg, model, environment)
     finally:
-        if hasattr(env, "close"):  # duck typing: local module has no close
-            env.close()
+        if hasattr(environment, "close"):  # duck typing: local module has no close
+            environment.close()
 
-    print(f"\n== {result['exit_status']} ==")
-    print(f"trajectory: {out}")
+
+def _print_assistant(content: str) -> None:
+    m = _ACTION_RE.search(content)
+    if m:
+        thought = content[: m.start()].strip()
+        if thought:
+            console.print(f"[dim]{escape(thought)}[/dim]")
+        console.print(Syntax(m.group(1).strip(), "bash", background_color="default"))
+    else:
+        console.print(f"[dim]{escape(content)}[/dim]")
+
+
+@app.command()
+def inspect(path: Path):
+    """回放一条轨迹。"""
+    data = json.loads(path.read_text())
+    status = data["exit_status"]
+    color = "green" if status == "success" else "red"
+    info = data.get("info", {})
+    console.print(f"[bold]task:[/] {escape(data['task'])}")
+    console.print(
+        f"[bold]status:[/] [{color}]{status}[/]  "
+        f"steps: {info.get('steps', '?')}  "
+        f"tokens: {info.get('total_tokens', '?')}  "
+        f"cost: ${info.get('total_cost_usd', 0.0)}"
+    )
+    console.print()
+    for m in data["messages"]:
+        role, content = m["role"], m["content"]
+        if role == "system":
+            console.print(f"[dim][system prompt, {len(content)} chars][/dim]")
+        elif role == "assistant":
+            console.print("[bold cyan]assistant[/]")
+            _print_assistant(content)
+        elif role == "exit":
+            console.print(f"[bold]exit: {escape(content)}[/]")
+        elif "<returncode>" in content:
+            console.print("[dim]" + escape(content)[:2000] + "[/]")
+        else:
+            console.print(f"[yellow]{escape(content)[:2000]}[/]")
+        console.print()
 
 
 if __name__ == "__main__":
-    main()
+    app()
