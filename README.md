@@ -16,6 +16,10 @@ uv sync
 
 Configure credentials in `.env` (behavior config lives in `src/mini_agent/config/default.yaml`):
 
+```bash
+cp .env.example .env   # then fill in your key
+```
+
 ```dotenv
 API_KEY=your-key
 BASE_URL=https://openai-compatible-endpoint/v4   # leave empty for official OpenAI

@@ -27,6 +27,7 @@ htmlcov/
 # Environments
 .env
 .env.*
+!.env.example
 
 # Agent run artifacts
 trajectories/
