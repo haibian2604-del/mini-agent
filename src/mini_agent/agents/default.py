@@ -37,6 +37,7 @@ def _preview(text: str, lines: int = 3, width: int = 120) -> str:
 
 def run(
     task: str,
+    model: str,
     max_steps: int = 20,
     max_cost_usd: float = 5.0,
     max_consecutive_format_errors: int = 3,
@@ -87,7 +88,7 @@ def run(
                     {"role": "exit", "content": f"Stopped: max steps ({max_steps}) reached."}
                 )
             try:
-                reply, usage = litellm_model.chat(messages)
+                reply, usage = litellm_model.chat(messages, model=model)
             except Exception as e:
                 raise ModelError(
                     {"role": "exit", "content": f"Stopped: model call failed: {e}"}

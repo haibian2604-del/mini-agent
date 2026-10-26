@@ -30,16 +30,17 @@ def _usage(response) -> dict:
     }
 
 
-def chat(messages: list[dict]) -> tuple[str, dict]:
+def chat(messages: list[dict], model: str) -> tuple[str, dict]:
     """One LLM call with retry (3x, 2s apart); returns (content, usage).
 
     AuthenticationError and KeyboardInterrupt are never retried — a bad key
     will not fix itself, and the user pressing Ctrl-C means now.
+    Model is an explicit argument — no hidden os.environ reads here.
     """
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             response = completion(
-                model=os.environ["MODEL"],
+                model=model,
                 messages=messages,
                 api_key=os.getenv("API_KEY"),
                 api_base=os.getenv("BASE_URL") or None,

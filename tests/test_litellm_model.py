@@ -44,14 +44,12 @@ class _FakeResp:
 
 def test_chat_returns_content_and_usage(monkeypatch):
     monkeypatch.setattr(litellm_model, "completion", lambda **kw: _FakeResp())
-    content, usage = chat([{"role": "user", "content": "ping"}])
+    content, usage = chat([{"role": "user", "content": "ping"}], model="m")
     assert content == "hi"
     assert usage == {"prompt_tokens": 10, "completion_tokens": 5, "cost_usd": 0.0}
 
 
 def test_chat_none_content_becomes_empty_string(monkeypatch):
-    monkeypatch.setattr(litellm_model, "completion", lambda **kw: _FakeResp())
-
     class _NoneMsg:
         content = None
 
@@ -63,7 +61,7 @@ def test_chat_none_content_becomes_empty_string(monkeypatch):
         usage = _FakeUsage()
 
     monkeypatch.setattr(litellm_model, "completion", lambda **kw: _NoneResp())
-    content, _ = chat([])
+    content, _ = chat([], model="m")
     assert content == ""
 
 
@@ -78,7 +76,7 @@ def test_chat_retries_then_succeeds(monkeypatch):
 
     monkeypatch.setattr(litellm_model, "completion", flaky)
     monkeypatch.setattr(litellm_model.time, "sleep", lambda s: None)
-    content, usage = chat([])
+    content, usage = chat([], model="m")
     assert calls["n"] == 3
     assert content == "hi"
 
@@ -93,5 +91,17 @@ def test_chat_auth_error_no_retry(monkeypatch):
     monkeypatch.setattr(litellm_model, "completion", bad_key)
     monkeypatch.setattr(litellm_model.time, "sleep", lambda s: None)
     with pytest.raises(litellm_model.AuthenticationError):
-        chat([])
+        chat([], model="m")
     assert calls["n"] == 1  # never retried
+
+
+def test_chat_passes_model_to_completion(monkeypatch):
+    seen = {}
+
+    def spy(**kw):
+        seen.update(kw)
+        return _FakeResp()
+
+    monkeypatch.setattr(litellm_model, "completion", spy)
+    chat([], model="openai/glm-x")
+    assert seen["model"] == "openai/glm-x"  # explicit injection, no os.environ read
