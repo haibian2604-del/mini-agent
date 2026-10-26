@@ -105,7 +105,7 @@ def inspect(path: Path):
     for m in data["messages"]:
         role, content = m["role"], m["content"]
         if role == "system":
-            console.print(f"[dim][system prompt, {len(content)} chars][/dim]")
+            console.print("[dim]" + escape(f"[system prompt, {len(content)} chars]") + "[/dim]")
         elif role == "assistant":
             console.print("[bold cyan]assistant[/]")
             _print_assistant(content)
