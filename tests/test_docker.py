@@ -1,12 +1,20 @@
-"""Tests for DockerEnvironment — skipped when docker is not installed."""
+"""Tests for DockerEnvironment — skipped when docker is unavailable."""
 
 import shutil
+import subprocess
 
 import pytest
 
 from mini_agent.environments.docker import DockerEnvironment
 
-pytestmark = pytest.mark.skipif(shutil.which("docker") is None, reason="docker not installed")
+
+def _docker_available() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    return subprocess.run(["docker", "info"], capture_output=True).returncode == 0
+
+
+pytestmark = pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 
 
 def test_docker_environment():
