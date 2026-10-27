@@ -28,8 +28,22 @@ def _build_env(name: str):
     return DockerEnvironment() if name == "docker" else local
 
 
+def _trajectory_path() -> Path:
+    """Collision-proof trajectory name: microseconds, plus -N if it somehow exists.
+
+    Readable and sorts by time, so a frozen/injected clock still can't clobber files.
+    """
+    stem = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    out = Path("trajectories") / f"{stem}.json"
+    n = 2
+    while out.exists():
+        out = Path("trajectories") / f"{stem}-{n}.json"
+        n += 1
+    return out
+
+
 def _run_one(task: str, cfg: Config, model: str, environment) -> None:
-    out = Path("trajectories") / f"{datetime.now():%Y%m%d-%H%M%S}.json"
+    out = _trajectory_path()
     result = default.run(
         task,
         model=model,

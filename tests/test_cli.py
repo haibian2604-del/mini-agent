@@ -2,10 +2,13 @@
 
 import json
 import os
+from datetime import datetime
 
 import pytest
 from typer.testing import CliRunner
 
+import mini_agent.models.litellm_model as litellm_model
+import mini_agent.run as run_module
 from mini_agent.run import app
 
 runner = CliRunner()
@@ -87,3 +90,32 @@ def test_inspect_last_empty_dir(monkeypatch, tmp_path):
 
     assert result.exit_code != 0
     assert "No trajectories" in result.output
+
+
+def test_trajectory_names_never_collide(monkeypatch, tmp_path):
+    # issue 003: two trajectories saved in the same second must both survive
+    monkeypatch.chdir(tmp_path)
+
+    class Frozen(datetime):
+        @classmethod
+        def now(cls):
+            return datetime(2026, 1, 1, 12, 0, 0)  # same second AND microsecond
+
+    monkeypatch.setattr(run_module, "datetime", Frozen)
+
+    _U0 = {"prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
+    replies = iter([
+        ("THOUGHT: a\n```bash\necho A\n```", _U0),
+        ("THOUGHT: done\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```", _U0),
+        ("THOUGHT: b\n```bash\necho B\n```", _U0),
+        ("THOUGHT: done\n```bash\necho COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT\n```", _U0),
+    ])
+    monkeypatch.setattr(litellm_model, "chat", lambda messages, model: next(replies))
+
+    assert runner.invoke(app, ["run", "任务A"]).exit_code == 0
+    assert runner.invoke(app, ["run", "任务B"]).exit_code == 0
+
+    files = sorted((tmp_path / "trajectories").glob("*.json"))
+    assert len(files) == 2  # both exist, neither clobbered
+    tasks = {json.loads(f.read_text())["task"] for f in files}
+    assert tasks == {"任务A", "任务B"}
