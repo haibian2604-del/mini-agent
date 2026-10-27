@@ -57,6 +57,12 @@ def test_run_interactive_exit_immediately():
     assert result.exit_code == 0
 
 
+def test_bare_invocation_enters_interactive():
+    # mini-agent with no subcommand = interactive mode
+    result = runner.invoke(app, [], input="exit\n")
+    assert result.exit_code == 0
+
+
 def test_inspect_last_opens_newest(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "trajectories").mkdir()

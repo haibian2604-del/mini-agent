@@ -24,6 +24,14 @@ console = Console()
 _ACTION_RE = re.compile(r"```bash\s*(.*?)```", re.DOTALL)
 
 
+@app.callback(invoke_without_command=True)
+def _default(ctx: typer.Context):
+    """A minimal coding agent. Run without a subcommand for interactive mode."""
+    if ctx.invoked_subcommand is None:
+        run()
+        raise typer.Exit()
+
+
 def _build_env(name: str):
     return DockerEnvironment() if name == "docker" else local
 
@@ -44,15 +52,13 @@ def _run_one(task: str, cfg: Config, model: str, environment) -> None:
     console.print(f"trajectory: {out}\n")
 
 
-@app.command()
-def run(
-    task: str | None = typer.Argument(None),
-    env: str | None = typer.Option(None, "--env", help="local | docker (default: yaml)"),
-    model: str | None = typer.Option(None, "--model", help="litellm model name (default: yaml)"),
-    config: Path | None = typer.Option(None, "--config", help="path to yaml config"),
-    max_steps: int | None = typer.Option(None, "--max-steps"),
-):
-    """跑一个任务。不带 task 参数 → 进入交互模式。"""
+def _start(
+    task: str | None,
+    env: str | None,
+    model: str | None,
+    config: Path | None,
+    max_steps: int | None,
+) -> None:
     cfg = load_config(config)
     model = model or cfg.model
     environment = _build_env(env or cfg.env)
@@ -74,6 +80,26 @@ def run(
     finally:
         if hasattr(environment, "close"):  # duck typing: local module has no close
             environment.close()
+
+
+@app.callback(invoke_without_command=True)
+def _default(ctx: typer.Context):
+    """A minimal coding agent. Run without a subcommand for interactive mode."""
+    if ctx.invoked_subcommand is None:
+        _start(None, None, None, None, None)
+        raise typer.Exit()
+
+
+@app.command()
+def run(
+    task: str | None = typer.Argument(None),
+    env: str | None = typer.Option(None, "--env", help="local | docker (default: yaml)"),
+    model: str | None = typer.Option(None, "--model", help="litellm model name (default: yaml)"),
+    config: Path | None = typer.Option(None, "--config", help="path to yaml config"),
+    max_steps: int | None = typer.Option(None, "--max-steps"),
+):
+    """跑一个任务。不带 task 参数 → 进入交互模式。"""
+    _start(task, env, model, config, max_steps)
 
 
 def _print_assistant(content: str) -> None:
