@@ -1,7 +1,9 @@
 """Tests for the CLI (typer CliRunner). No API calls here."""
 
 import json
+import os
 
+import pytest
 from typer.testing import CliRunner
 
 from mini_agent.run import app
@@ -53,3 +55,29 @@ def test_run_interactive_exit_immediately():
     # empty interactive loop: input "exit" quits before any API call
     result = runner.invoke(app, ["run"], input="exit\n")
     assert result.exit_code == 0
+
+
+def test_inspect_last_opens_newest(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "trajectories").mkdir()
+    old = tmp_path / "trajectories" / "20260101-000000.json"
+    new = tmp_path / "trajectories" / "20260102-000000.json"
+    old.write_text(json.dumps(dict(_TRAJECTORY, task="OLD"), ensure_ascii=False))
+    new.write_text(json.dumps(dict(_TRAJECTORY, task="NEW"), ensure_ascii=False))
+    os.utime(old, (1, 1))  # force mtime order, independent of creation order
+
+    result = runner.invoke(app, ["inspect", "--last"])
+
+    assert result.exit_code == 0
+    assert "NEW" in result.output
+    assert "OLD" not in result.output
+
+
+def test_inspect_last_empty_dir(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "trajectories").mkdir()
+
+    result = runner.invoke(app, ["inspect", "--last"])
+
+    assert result.exit_code != 0
+    assert "No trajectories" in result.output

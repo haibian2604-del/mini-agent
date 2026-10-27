@@ -88,8 +88,22 @@ def _print_assistant(content: str) -> None:
 
 
 @app.command()
-def inspect(path: Path):
+def inspect(
+    path: Path | None = typer.Argument(None),
+    last: bool = typer.Option(False, "--last", help="open the newest trajectory"),
+):
     """回放一条轨迹。"""
+    if path is None:
+        if not last:
+            console.print("[red]Provide a trajectory path, or use --last.[/red]")
+            raise typer.Exit(1)
+        candidates = sorted(
+            Path("trajectories").glob("*.json"), key=lambda p: p.stat().st_mtime
+        )
+        if not candidates:
+            console.print("[red]No trajectories in trajectories/ — run a task first.[/red]")
+            raise typer.Exit(1)
+        path = candidates[-1]
     data = json.loads(path.read_text())
     status = data["exit_status"]
     color = "green" if status == "success" else "red"
