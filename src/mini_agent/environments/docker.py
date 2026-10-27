@@ -4,6 +4,13 @@ import shlex
 import subprocess
 from pathlib import Path
 
+# docker CLI signatures that mean "the sandbox is gone" (not the command's fault)
+_DEAD_SANDBOX_MARKERS = (
+    "is not running",
+    "No such container",
+    "Cannot connect to the Docker daemon",
+)
+
 
 class DockerEnvironment:
     """Sandboxed shell inside a container.
@@ -50,6 +57,22 @@ class DockerEnvironment:
             )
         except subprocess.TimeoutExpired:
             return {"output": f"Command timed out after {timeout}s", "returncode": -1}
+
+        if result.returncode != 0 and any(
+            marker in (result.stderr or "") + (result.stdout or "")
+            for marker in _DEAD_SANDBOX_MARKERS
+        ):
+            # sandbox died externally (docker stop / crash / daemon down): without
+            # this, the model sees docker's raw error and blames its own command
+            return {
+                "output": (
+                    "[sandbox unavailable] The container backing this environment is not "
+                    "running (stopped externally or crashed). NO command can succeed — do not "
+                    "retry or rewrite your command; the task cannot continue. "
+                    f"docker error: {result.stderr or result.stdout}"
+                ),
+                "returncode": -2,
+            }
 
         if result.returncode == 124:  # coreutils timeout's exit code
             # ponytail: a command that genuinely exits 124 is misreported as a timeout

@@ -1,7 +1,8 @@
-"""Tests for DockerEnvironment — skipped when docker is unavailable."""
+"""Tests for DockerEnvironment. Real-container test skips when docker is unavailable."""
 
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -14,9 +15,63 @@ def _docker_available() -> bool:
     return subprocess.run(["docker", "info"], capture_output=True).returncode == 0
 
 
-pytestmark = pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
+_real_docker = pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
 
 
+def _bare_env() -> DockerEnvironment:
+    """Instance without __init__ — no container needed for execute()-level tests."""
+    env = object.__new__(DockerEnvironment)
+    env.container = "test-sandbox"
+    env.workspace = Path("/tmp/never-used")
+    return env
+
+
+def _fake_run(returncode: int, stderr: str = "", stdout: str = ""):
+    def fake(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
+
+    return fake
+
+
+def test_dead_sandbox_is_reported_distinctly(monkeypatch):
+    # container stopped externally -> NOT a command failure, must not look like one
+    monkeypatch.setattr(
+        "mini_agent.environments.docker.subprocess.run",
+        _fake_run(127, stderr="Error response from daemon: Container test-sandbox is not running"),
+    )
+    r = _bare_env().execute("ls")
+    assert r["returncode"] == -2
+    assert "sandbox unavailable" in r["output"]
+
+
+def test_daemon_down_is_reported_distinctly(monkeypatch):
+    monkeypatch.setattr(
+        "mini_agent.environments.docker.subprocess.run",
+        _fake_run(1, stderr="Cannot connect to the Docker daemon at unix:///var/run/docker.sock"),
+    )
+    r = _bare_env().execute("ls")
+    assert r["returncode"] == -2
+    assert "sandbox unavailable" in r["output"]
+
+
+def test_normal_command_behavior_unchanged(monkeypatch):
+    # healthy container: rc 0 and real command rc both pass through untouched
+    monkeypatch.setattr(
+        "mini_agent.environments.docker.subprocess.run",
+        _fake_run(0, stdout="hello\n"),
+    )
+    r = _bare_env().execute("echo hello")
+    assert r == {"output": "hello\n", "returncode": 0}
+
+    monkeypatch.setattr(
+        "mini_agent.environments.docker.subprocess.run",
+        _fake_run(3),
+    )
+    r = _bare_env().execute("exit 3")
+    assert r == {"output": "", "returncode": 3}
+
+
+@_real_docker
 def test_docker_environment():
     env = DockerEnvironment()
     try:
