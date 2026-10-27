@@ -24,6 +24,36 @@ def test_parse_action_zero_blocks_raises():
     assert "found 0" in e.value.messages[0]["content"]
 
 
+def test_parse_action_accepts_unlabeled_block():
+    # issue 005: models often drop the language label
+    cmd = parse_action("THOUGHT: look around.\n\n```\necho hello\n```\n")
+    assert cmd == "echo hello"
+
+
+def test_parse_action_rejects_python_only_block():
+    # strategy: non-bash labels are not actions (can't run in a bash shell)
+    with pytest.raises(FormatError) as e:
+        parse_action("THOUGHT: calc\n\n```python\nprint(1)\n```\n")
+    assert "found 0" in e.value.messages[0]["content"]
+
+
+def test_parse_action_mixed_blocks_no_false_positive():
+    # python snippet in THOUGHT + one bash command -> bash wins, python ignored
+    text = (
+        "THOUGHT: here is some python\n\n```python\nprint(1)\n```\n"
+        "and the action:\n\n```bash\necho hello\n```\n"
+    )
+    assert parse_action(text) == "echo hello"
+
+
+def test_parse_action_unlabeled_plus_bash_counts_both():
+    # both are actionable candidates -> exactly-one constraint still applies
+    text = "```\necho a\n```\n```bash\necho b\n```"
+    with pytest.raises(FormatError) as e:
+        parse_action(text)
+    assert "found 2" in e.value.messages[0]["content"]
+
+
 class _FakeMsg:
     content = "hi"
 

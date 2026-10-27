@@ -55,24 +55,30 @@ def chat(messages: list[dict], model: str) -> tuple[str, dict]:
     return response.choices[0].message.content or "", _usage(response)
 
 
-_ACTION_RE = re.compile(r"```bash\s*(.*?)```", re.DOTALL)
+_ACTION_RE = re.compile(r"```([A-Za-z0-9_+-]*)[^\S\n]*\n(.*?)```", re.DOTALL)
 
 
 def parse_action(text: str) -> str:
     """Extract the single bash command from a model reply.
 
+    Accepts blocks labeled ```bash and unlabeled blocks (models often drop the
+    label). Other language labels (```python etc.) are ignored entirely — they
+    can't run in a bash shell, so they don't count as candidate actions.
+
     Raises FormatError carrying the feedback message (fed back to the model
-    for self-correction) when the reply has no exactly one ```bash block.
+    for self-correction) when the actionable-block count is not exactly 1.
     """
-    blocks = _ACTION_RE.findall(text)
-    if len(blocks) != 1:
+    candidates = [
+        body for lang, body in _ACTION_RE.findall(text) if lang.lower() in ("", "bash")
+    ]
+    if len(candidates) != 1:
         raise FormatError({
             "role": "user",
             "content": (
-                f"Format error: expected exactly 1 bash code block, found {len(blocks)}. "
+                f"Format error: expected exactly 1 bash code block, found {len(candidates)}. "
                 "Reply with a short THOUGHT and exactly one ```bash block containing one command."
             ),
         })
-    return blocks[0].strip()
+    return candidates[0].strip()
 
 
