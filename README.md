@@ -25,6 +25,23 @@ API_KEY=your-key
 BASE_URL=https://openai-compatible-endpoint/v4   # leave empty for official OpenAI
 ```
 
+## Quickstart
+
+```bash
+cp .env.example .env   # fill in API_KEY (BASE_URL if not official OpenAI)
+uv run mini-agent run "echo hello"
+```
+
+The shipped `src/mini_agent/config/default.yaml` points at a custom endpoint
+(`openai/glm-5.3-flash`). Using another provider? Either pass a flag:
+
+```bash
+uv run mini-agent run --model openai/gpt-4o-mini "echo hello"
+```
+
+or edit the `model:` line in the yaml. The name must carry a litellm provider
+prefix (`openai/...` = any OpenAI-compatible endpoint, paired with `BASE_URL`).
+
 ## Usage
 
 ```bash
