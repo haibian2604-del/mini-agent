@@ -24,14 +24,6 @@ console = Console()
 _ACTION_RE = re.compile(r"```bash\s*(.*?)```", re.DOTALL)
 
 
-@app.callback(invoke_without_command=True)
-def _default(ctx: typer.Context):
-    """A minimal coding agent. Run without a subcommand for interactive mode."""
-    if ctx.invoked_subcommand is None:
-        run()
-        raise typer.Exit()
-
-
 def _build_env(name: str):
     return DockerEnvironment() if name == "docker" else local
 
