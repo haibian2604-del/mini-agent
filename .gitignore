@@ -39,3 +39,6 @@ trajectories/
 
 # sandbox workspace mount (run artifacts)
 workspace/
+
+# local notes
+issues/
