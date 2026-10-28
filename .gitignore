@@ -41,3 +41,6 @@ trajectories/
 workspace/
 
 # local notes
+
+# eval runs
+evals/
