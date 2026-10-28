@@ -135,3 +135,9 @@ def test_chat_passes_model_to_completion(monkeypatch):
     monkeypatch.setattr(litellm_model, "completion", spy)
     chat([], model="openai/glm-x")
     assert seen["model"] == "openai/glm-x"  # explicit injection, no os.environ read
+
+
+def test_parse_action_accepts_bash_info_string():
+    # reviewer probe B (005 retro): ```bash title="x" fences must still parse
+    cmd = parse_action('THOUGHT: x\n\n```bash title="x"\necho hi\n```')
+    assert cmd == "echo hi"

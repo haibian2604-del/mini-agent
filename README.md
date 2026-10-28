@@ -64,7 +64,7 @@ Options: `--env local|docker`, `--model provider/name`, `--config path.yaml`,
 ## Development
 
 ```bash
-uv run pytest -v        # 31 tests, all offline (fake model / fake env)
+uv run pytest -v        # all offline (fake model / fake env)
 ```
 
 Architecture: `agents/default.py` (the loop) orchestrates two duck-typed

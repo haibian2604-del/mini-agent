@@ -55,7 +55,7 @@ def chat(messages: list[dict], model: str) -> tuple[str, dict]:
     return response.choices[0].message.content or "", _usage(response)
 
 
-_ACTION_RE = re.compile(r"```([A-Za-z0-9_+-]*)[^\S\n]*\n(.*?)```", re.DOTALL)
+_ACTION_RE = re.compile(r"```([A-Za-z0-9_+-]*)(?:[^\S\n]+([^\n]*))?\n(.*?)```", re.DOTALL)
 
 
 def parse_action(text: str) -> str:
@@ -69,7 +69,9 @@ def parse_action(text: str) -> str:
     for self-correction) when the actionable-block count is not exactly 1.
     """
     candidates = [
-        body for lang, body in _ACTION_RE.findall(text) if lang.lower() in ("", "bash")
+        body
+        for lang, _info, body in _ACTION_RE.findall(text)
+        if lang.lower() in ("", "bash")
     ]
     if len(candidates) != 1:
         raise FormatError({
