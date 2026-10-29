@@ -23,5 +23,6 @@ packages = ["src/mini_agent"]
 
 [dependency-groups]
 dev = [
+    "pyarrow>=26.0.0",
     "pytest>=9.1.1",
 ]

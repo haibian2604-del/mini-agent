@@ -43,4 +43,5 @@ workspace/
 # local notes
 
 # eval runs
-evals/
+evals/repos/
+evals/work/

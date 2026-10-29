@@ -1,0 +1,51 @@
+diff --git a/sympy/physics/units/prefixes.py b/sympy/physics/units/prefixes.py
+index ca6a642156..bf6d4d0978 100644
+--- a/sympy/physics/units/prefixes.py
++++ b/sympy/physics/units/prefixes.py
+@@ -85,9 +85,7 @@ def __mul__(self, other):
+ 
+         fact = self.scale_factor * other.scale_factor
+ 
+-        if fact == 1:
+-            return 1
+-        elif isinstance(other, Prefix):
++        if isinstance(other, Prefix):
+             # simplify prefix
+             for p in PREFIXES:
+                 if PREFIXES[p].scale_factor == fact:
+@@ -102,9 +100,7 @@ def __truediv__(self, other):
+ 
+         fact = self.scale_factor / other.scale_factor
+ 
+-        if fact == 1:
+-            return 1
+-        elif isinstance(other, Prefix):
++        if isinstance(other, Prefix):
+             for p in PREFIXES:
+                 if PREFIXES[p].scale_factor == fact:
+                     return PREFIXES[p]
+diff --git a/sympy/physics/units/tests/test_prefixes.py b/sympy/physics/units/tests/test_prefixes.py
+index 8a7ae3a2c4..666bff4821 100644
+--- a/sympy/physics/units/tests/test_prefixes.py
++++ b/sympy/physics/units/tests/test_prefixes.py
+@@ -2,7 +2,7 @@
+ from sympy.core.numbers import Rational
+ from sympy.core.singleton import S
+ from sympy.core.symbol import (Symbol, symbols)
+-from sympy.physics.units import Quantity, length, meter
++from sympy.physics.units import Quantity, length, meter, milli, volt, watt
+ from sympy.physics.units.prefixes import PREFIXES, Prefix, prefix_unit, kilo, \
+     kibi
+ from sympy.physics.units.systems import SI
+@@ -34,6 +34,11 @@ def test_prefix_operations():
+     assert dodeca * m == 12 * m
+     assert dodeca / m == 12 / m
+ 
++    # https://github.com/sympy/sympy/issues/24094
++    from sympy.physics.units import W, volt
++    assert milli * W == watt / 1000
++    assert milli * volt == volt / 1000
++
+     expr1 = kilo * 3
+     assert isinstance(expr1, Mul)
+     assert expr1.args == (3, kilo)

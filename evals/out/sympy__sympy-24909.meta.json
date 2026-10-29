@@ -1,0 +1,8 @@
+{
+  "instance_id": "sympy__sympy-24909",
+  "exit_status": "success",
+  "steps": 19,
+  "total_tokens": 95697,
+  "patch_lines": 51,
+  "duration_s": 618.5
+}
