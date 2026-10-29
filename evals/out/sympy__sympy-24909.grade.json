@@ -1,7 +1,7 @@
 {
   "instance_id": "sympy__sympy-24909",
-  "verdict": "FAILED",
-  "honesty_check": "UNEXPECTED-PASS",
+  "verdict": "RESOLVED",
+  "honesty_check": "OK",
   "graded_rc": 0,
   "notes": []
 }

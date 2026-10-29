@@ -64,6 +64,7 @@ def main() -> int:
         return 2
     cmd = pytest_cmd(test_files, names)
     print(f"[grade] test command: {cmd}")
+    verdict_notes = []
 
     work = WORK / f"{task_id}-grade"
     prepare_repo(REPOS / "sympy", task["repo"])
@@ -71,13 +72,22 @@ def main() -> int:
 
     env = DockerEnvironment(image="mini-agent-eval", workspace=work)
     try:
-        # honesty check FIRST: on the untouched checkout the golden tests must fail.
-        # proves the grader can tell "did nothing" apart from "fixed it".
+        # ① golden patch on the clean site
+        (work / ".test.patch").write_text(task["test_patch"])
+        golden = env.execute("git apply .test.patch")
+        if golden["returncode"] != 0:
+            print(f"[grade] golden test patch failed to apply: {golden['output'][-300:]}")
+            return 2
+
+        # ② honesty: with the golden tests but no fix, the new assertions MUST fail
         honest = env.execute(cmd, timeout=TEST_TIMEOUT)
         honest_ok = "OK" if honest["returncode"] != 0 else "UNEXPECTED-PASS"
-        print(f"[grade] honesty check (no patch): rc={honest['returncode']} -> {honest_ok}")
+        print(f"[grade] honesty check (golden only, no fix): rc={honest['returncode']} -> {honest_ok}")
 
-        verdict_notes = []
+        # ③ undo golden, back to clean
+        env.execute(f"git checkout {base} -- {' '.join(test_files)}")
+
+        # ④ agent patch
         if agent_patch.strip():
             (work / ".agent.patch").write_text(agent_patch)
             applied = env.execute("git apply .agent.patch && rm .agent.patch")
@@ -86,15 +96,13 @@ def main() -> int:
         else:
             verdict_notes.append("agent produced an empty patch (no changes)")
 
-        # reset test files the golden patch will touch — the agent may have edited them
+        # ⑤ undo whatever the agent did to test files — golden must land on base tests
         env.execute(f"git checkout {base} -- {' '.join(test_files)}")
 
-        (work / ".test.patch").write_text(task["test_patch"])
-        golden = env.execute("git apply .test.patch && rm .test.patch")
-        if golden["returncode"] != 0:
-            print(f"[grade] golden test patch failed to apply: {golden['output'][-300:]}")
-            return 2
+        # ⑥ golden again
+        env.execute("git apply .test.patch")
 
+        # ⑦ graded run
         graded = env.execute(cmd, timeout=TEST_TIMEOUT)
         if graded["returncode"] == 5:
             verdict_notes.append("pytest matched no tests (rc=5)")

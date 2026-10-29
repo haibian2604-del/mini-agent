@@ -1,0 +1,41 @@
+diff --git a/sympy/physics/units/tests/test_quantities.py b/sympy/physics/units/tests/test_quantities.py
+index 25a68c7be5..673dd674d2 100644
+--- a/sympy/physics/units/tests/test_quantities.py
++++ b/sympy/physics/units/tests/test_quantities.py
+@@ -541,6 +541,20 @@ def test_issue_20288():
+     assert SI._collect_factor_and_dimension(expr) == (1 + E, Dimension(1))
+ 
+ 
++def test_issue_24062():
++    from sympy import exp
++    from sympy.core.numbers import E
++    from sympy.physics import units
++    from sympy.physics.units.systems.si import SI
++
++    expr = units.second / (units.ohm * units.farad)
++    dim = SI._collect_factor_and_dimension(expr)[1]
++    assert SI.get_dimension_system().is_dimensionless(dim)
++
++    buggy_expr = 100 + exp(expr)
++    assert SI._collect_factor_and_dimension(buggy_expr) == (100 + E, Dimension(1))
++
++
+ def test_prefixed_property():
+     assert not meter.is_prefixed
+     assert not joule.is_prefixed
+diff --git a/sympy/physics/units/unitsystem.py b/sympy/physics/units/unitsystem.py
+index 3daf84c108..75ddb27cb0 100644
+--- a/sympy/physics/units/unitsystem.py
++++ b/sympy/physics/units/unitsystem.py
+@@ -192,8 +192,9 @@ def _collect_factor_and_dimension(self, expr):
+         elif isinstance(expr, Function):
+             fds = [self._collect_factor_and_dimension(
+                 arg) for arg in expr.args]
+-            return (expr.func(*(f[0] for f in fds)),
+-                    *(d[1] for d in fds))
++            dims = [Dimension(1) if self.get_dimension_system().is_dimensionless(d[1])
++                    else d[1] for d in fds]
++            return (expr.func(*(f[0] for f in fds)), *dims)
+         elif isinstance(expr, Dimension):
+             return S.One, expr
+         else:
